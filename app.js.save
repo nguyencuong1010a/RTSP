@@ -1,0 +1,51 @@
+const express = require('express');
+const https = require('https');
+const fs = require('fs');
+const rtspRelay = require('rtsp-relay');
+const cors = require('cors')
+
+const options = {
+  key: fs.readFileSync("./key.pem", 'utf8'),
+  cert: fs.readFileSync("./cert.pem", 'utf8'),
+};
+
+const app = express();
+app.use(cors())
+const server = https.createServer(options, app);
+
+const { proxy, scriptUrl } = rtspRelay(app, server);
+
+//Get 
+app.ws('/api/stream/:username/:password/:domain/:channel', (ws, req) => {
+  proxy({
+    url: `rtsp://${req.params.username}:${req.params.password}@${req.params.domain}.kbvision.tv:554/cam/realmonitor?channel=${req.params.channel}&subtype=0`,
+    verbose: false,
+    transport: 'tcp' 
+  })(ws)
+}
+);
+
+
+
+// this is an example html page to view the stream
+app.get('/:username/:password/:domain/:channel', (req, res) => {
+ console.log('get')
+  res.send(`
+  <canvas id='canvas' width='640' height='480'></canvas>
+
+  <script src='${scriptUrl}'></script>
+  <script>
+    loadPlayer({
+      url: 'wss://' + location.host + '/api/stream/${req.params.username}/${req.params.password}/${req.params.domain}/${req.params.channel}',
+      canvas: document.getElementById('canvas')
+    });
+    
+  </script>
+`)
+}
+
+);
+
+server.listen(3000, (req, res) => {
+  console.log('Port 3000')
+});
